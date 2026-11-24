@@ -6,6 +6,8 @@ import ftplib
 import sqlite3
 import logging
 import asyncio
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import a2s
 from dotenv import load_dotenv
 from telegram import Update
@@ -61,6 +63,23 @@ CACHE_TTL_SEC = 180
 
 _last_sync_time: float = 0.0
 _sync_lock = asyncio.Lock()
+
+
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+    def log_message(self, format, *args):
+        pass
+
+
+def start_dummy_server() -> None:
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+    logger.info(f"HTTP-заглушка запущена на порту {port}")
+    server.serve_forever()
 
 
 class ServerTracker:
@@ -350,6 +369,8 @@ def main() -> None:
     if not TOKEN:
         logger.critical("TELEGRAM_BOT_TOKEN не знайдено у файлі .env!")
         return
+
+    threading.Thread(target=start_dummy_server, daemon=True).start()
 
     application = ApplicationBuilder().token(TOKEN).build()
 
